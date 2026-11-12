@@ -5,50 +5,95 @@ import json
 import csv
 from datetime import datetime
 from pathlib import Path
+from kafka import KafkaProducer
 
-# AtmoSync project directory
+# ---------------------------------
+# AtmoSync Project Configuration
+# ---------------------------------
+
 project_folder = Path(__file__).resolve().parent.parent
 
-# Save generated sensor data here
-output_file = project_folder / "data" / "raw" / "sensor_readings.csv"
+output_file = (
+    project_folder / "data" / "raw" / "sensor_readings.csv"
+)
 
-# Generate sensor readings continuously
-print("AtmoSync IoT Sensor Simulator Started")
-print("Press Ctrl + C to stop the simulator.\n")
+kafka_topic = "container-sensor-data"
+kafka_server = "localhost:9092"
+
+# ---------------------------------
+# Connect to Kafka
+# ---------------------------------
+
+print("Connecting to Kafka...")
+
+producer = KafkaProducer(
+    bootstrap_servers=[kafka_server],
+    value_serializer=lambda data: json.dumps(data).encode("utf-8")
+)
+
+print("Kafka connection initialized!")
+print("AtmoSync IoT Sensor Simulator Started!")
+print("Sensor data will be saved to CSV and sent to Kafka.")
+print("Press Ctrl + C to stop.\n")
+
+# ---------------------------------
+# CSV Column Names
+# ---------------------------------
+
+fieldnames = [
+    "container_id",
+    "timestamp",
+    "temperature_c",
+    "humidity_percent",
+    "vibration_g"
+]
+
+# ---------------------------------
+# Generate and Stream Sensor Data
+# ---------------------------------
 
 try:
     while True:
 
-        # Generate mock sensor readings
+        # Generate one sensor reading
         sensor_data = {
             "container_id": "CONTAINER_001",
             "timestamp": datetime.now().isoformat(),
             "temperature_c": round(random.uniform(4, 12), 2),
-            "humidity_percent": round(random.uniform(60, 90), 2),
+            "humidity_percent": round(random.uniform(40, 90), 2),
             "vibration_g": round(random.uniform(0.0, 1.5), 2)
         }
 
-        # Display readings
-        print(json.dumps(sensor_data, indent=4))
-
-        # Save readings to CSV
+        # Save the same reading to CSV
         file_exists = output_file.exists()
 
-        with open(output_file, "a", newline="") as file:
-            writer = csv.DictWriter(
-                file,
-                fieldnames=sensor_data.keys()
-            )
+        with open(output_file, "a", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-            if not file_exists:
+            if not file_exists or output_file.stat().st_size == 0:
                 writer.writeheader()
 
             writer.writerow(sensor_data)
 
-        print("Sensor reading saved successfully!\n")
+        # Send the same reading to Kafka
+        future = producer.send(kafka_topic, sensor_data)
+        future.get(timeout=10)
 
-        # Wait 5 seconds before the next reading
+        # Display the generated reading
+        print("Sensor Reading:")
+        print(json.dumps(sensor_data, indent=4))
+        print("Saved to CSV and sent to Kafka successfully!\n")
+
+        # Generate readings every 5 seconds
         time.sleep(5)
 
 except KeyboardInterrupt:
-    print("\nAtmoSync IoT Simulator stopped.")
+    print("\nAtmoSync simulator stopped by user.")
+
+except Exception as error:
+    print("\nAn error occurred:", error)
+
+finally:
+    producer.flush()
+    producer.close()
+    print("Kafka connection closed.")
