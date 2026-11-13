@@ -1,2 +1,6 @@
 # AtmoSync
 Micro-Climate Arbitrage Analytics
+# AtmoSync
+**Micro-Climate Arbitrage Analytics**
+
+AtmoSync is a smart supply chain monitoring and analytics project designed to track and analyze environmental conditions inside agricultural shipping containers. The project uses Python to simulate IoT sensor readings such as temperature, humidity, and vibration to monitor the condition of agricultural products during transportation. Apache Kafka is used for real-time data streaming, while PostgreSQL is used to store and manage the collected sensor data. The project also aims to use dbt Core for data transformation and Apache Superset for creating interactive dashboards and visualizing important insights. By combining environmental sensor information with historical agricultural commodity price data, AtmoSync aims to identify potential spoilage risks and market opportunities. The main objective is to reduce agricultural product losses, improve transportation monitoring, and support better supply chain decisions through data-driven analytics. Currently, PostgreSQL has been installed and connected successfully using pgAdmin 4, and the `atmosync_db` database has been created. The next steps include creating the sensor readings table, connecting the Python simulator to PostgreSQL, transforming the collected data, and developing analytical dashboards.
