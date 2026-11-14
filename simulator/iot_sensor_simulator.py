@@ -1,99 +1,91 @@
-
+ 
 import random
 import time
-import json
-import csv
 from datetime import datetime
-from pathlib import Path
-from kafka import KafkaProducer
 
-# ---------------------------------
-# AtmoSync Project Configuration
-# ---------------------------------
+import psycopg2
 
-project_folder = Path(__file__).resolve().parent.parent
 
-output_file = (
-    project_folder / "data" / "raw" / "sensor_readings.csv"
-)
+# PostgreSQL database connection
+def connect_to_db():
+    try:
+        connection = psycopg2.connect(
+            host="localhost",
+            database="atmosync_db",
+            user="postgres",
+            password="aishu509",
+            port="5432"
+        )
+        print("Connected to PostgreSQL successfully!")
+        return connection
 
-kafka_topic = "container-sensor-data"
-kafka_server = "localhost:9092"
+    except psycopg2.Error as error:
+        print("Database connection failed:", error)
+        return None
 
-# ---------------------------------
-# Connect to Kafka
-# ---------------------------------
 
-print("Connecting to Kafka...")
+# Generate simulated IoT sensor data
+def generate_sensor_reading():
+    return {
+        "container_id": "CONTAINER_001",
+        "recorded_at": datetime.now(),
+        "temperature_c": round(random.uniform(15, 35), 2),
+        "humidity_percent": round(random.uniform(40, 90), 2),
+        "vibration_g": round(random.uniform(0.10, 1.00), 2)
+    }
 
-producer = KafkaProducer(
-    bootstrap_servers=[kafka_server],
-    value_serializer=lambda data: json.dumps(data).encode("utf-8")
-)
 
-print("Kafka connection initialized!")
-print("AtmoSync IoT Sensor Simulator Started!")
-print("Sensor data will be saved to CSV and sent to Kafka.")
-print("Press Ctrl + C to stop.\n")
+# Store sensor data in PostgreSQL
+def save_sensor_reading(connection, reading):
+    try:
+        cursor = connection.cursor()
 
-# ---------------------------------
-# CSV Column Names
-# ---------------------------------
+        query = """
+            INSERT INTO sensor_readings
+            (container_id, recorded_at, temperature_c,
+             humidity_percent, vibration_g)
+            VALUES (%s, %s, %s, %s, %s)
+        """
 
-fieldnames = [
-    "container_id",
-    "timestamp",
-    "temperature_c",
-    "humidity_percent",
-    "vibration_g"
-]
+        values = (
+            reading["container_id"],
+            reading["recorded_at"],
+            reading["temperature_c"],
+            reading["humidity_percent"],
+            reading["vibration_g"]
+        )
 
-# ---------------------------------
-# Generate and Stream Sensor Data
-# ---------------------------------
+        cursor.execute(query, values)
+        connection.commit()
+        cursor.close()
 
-try:
-    while True:
+        print("Sensor reading saved:", reading)
 
-        # Generate one sensor reading
-        sensor_data = {
-            "container_id": "CONTAINER_001",
-            "timestamp": datetime.now().isoformat(),
-            "temperature_c": round(random.uniform(4, 12), 2),
-            "humidity_percent": round(random.uniform(40, 90), 2),
-            "vibration_g": round(random.uniform(0.0, 1.5), 2)
-        }
+    except psycopg2.Error as error:
+        connection.rollback()
+        print("Error saving sensor data:", error)
 
-        # Save the same reading to CSV
-        file_exists = output_file.exists()
 
-        with open(output_file, "a", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=fieldnames)
+# Main program
+def main():
+    connection = connect_to_db()
 
-            if not file_exists or output_file.stat().st_size == 0:
-                writer.writeheader()
+    if connection is None:
+        return
 
-            writer.writerow(sensor_data)
+    try:
+        while True:
+            reading = generate_sensor_reading()
+            save_sensor_reading(connection, reading)
+            time.sleep(5)
 
-        # Send the same reading to Kafka
-        future = producer.send(kafka_topic, sensor_data)
-        future.get(timeout=10)
+    except KeyboardInterrupt:
+        print("\nSensor simulation stopped.")
 
-        # Display the generated reading
-        print("Sensor Reading:")
-        print(json.dumps(sensor_data, indent=4))
-        print("Saved to CSV and sent to Kafka successfully!\n")
+    finally:
+        connection.close()
+        print("Database connection closed.")
 
-        # Generate readings every 5 seconds
-        time.sleep(5)
 
-except KeyboardInterrupt:
-    print("\nAtmoSync simulator stopped by user.")
-
-except Exception as error:
-    print("\nAn error occurred:", error)
-
-finally:
-    producer.flush()
-    producer.close()
-    print("Kafka connection closed.")
+if __name__ == "__main__":
+    main()
